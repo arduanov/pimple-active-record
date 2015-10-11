@@ -51,15 +51,13 @@ class RecordTest extends \PHPUnit_Framework_TestCase
         $this->assertInstanceOf('Comment', $this->app['comment.model']);
     }
 
-//    public function testInsert()
-//    {
-//        $post = $this->app['post.model']->create(['title' => 'title', 'slug' => 'slug']);
-//        $post->save();
-//
-//        $this->assertEquals(1, $post->id);
-//        $db_post = $this->app['post.model']->find(1);
-//        $this->assertEquals($post->title,$db_post->title);
-//    }
+    public function testtableName()
+    {
+        $table = $this->app['post.model']->tableName();
+        $this->assertEquals('post', $table);
+        $table = $this->app['comment.model']->tableName();
+        $this->assertEquals('table_comment', $table);
+    }
 
 
     public function testCRUD()
