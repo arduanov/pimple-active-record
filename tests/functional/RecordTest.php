@@ -65,33 +65,50 @@ class RecordTest extends \PHPUnit_Framework_TestCase
     public function testCRUD()
     {
         /**
-         * testSave
+         * test save
          */
         $post = $this->app['post.model']->create(['title' => 'title', 'slug' => 'slug']);
         $post->save();
         $post2 = $this->app['post.model']->create(['title' => 'title1', 'slug' => 'slug2']);
         $post2->save();
+        $post3 = $this->app['post.model']->create(['title' => 'title44', 'slug' => 'slug2']);
+        $post3->save();
 
         $this->assertEquals(2, $post2->id);
 
         /**
+         * test update
+         */
+        $post2->slug = 99;
+        $result_id = $post2->save();
+        $this->assertEquals(1,$result_id);
+
+        /**
+         * find where
+         */
+        $db_post_where = $this->app['post.model']->where(['id >='=> 2])->all();
+        $this->assertCount(2, $db_post_where);
+
+        /**
          * find by id
          */
-        $db_post = $this->app['post.model']->find(2);
-        $this->assertEquals($post2->title, $db_post->title);
+        $db_post = $this->app['post.model']->find(3);
+        $this->assertEquals($post3->title, $db_post->title);
 
 
         /**
          * find all
          */
         $db_post_all = $this->app['post.model']->all();
-        $this->assertCount(2, $db_post_all);
+        $this->assertCount(3, $db_post_all);
+
+
 
         /**
          * delete
          */
         $delete_result = $post2->delete();
-        $this->assertTrue($delete_result);
+        $this->assertEquals(1, $delete_result);
 
 
     }

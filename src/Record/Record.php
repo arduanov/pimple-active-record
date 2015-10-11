@@ -27,11 +27,11 @@ class Record implements \ArrayAccess
 //    }
     public function createBuilder()
     {
-        static::$builder = new QueryBuilder($this->app()['db']);
-        static::$builder->setModelClass(get_class($this));
-        static::$builder->select('*')->from($this->tableName());
+        $builder = new QueryBuilder($this->app()['db']);
+        $builder->setModel($this);
+        $builder->select('*')->from($this->tableName());
 
-        return static::$builder;
+        return static::$builder = $builder;
     }
 
     /**
@@ -39,7 +39,6 @@ class Record implements \ArrayAccess
      */
     protected function builder()
     {
-//        $this->createBuilder();
         return static::$builder;
     }
 
@@ -97,7 +96,6 @@ class Record implements \ArrayAccess
      * If the $data parameter is given and is an array, the constructor sets
      * the class's variables based on the key=>value pairs found in the array.
      *
-     * @param array $data An array of key,value pairs.
      * @param boolean $is_pdo_fetch
      */
     public function __construct($is_pdo_fetch = false)
@@ -122,11 +120,8 @@ class Record implements \ArrayAccess
     private function getValuesForDb()
     {
         $value_of = [];
-        $columns = $this->getColumns();
-        foreach ($columns as $column) {
-            if (!empty($this->$column) || is_numeric($this->$column)) { // Do include 0 as value
-                $value_of[$column] = $this->$column;
-            }
+        foreach ($this->getColumns() as $column) {
+            $value_of[$column] = $this->$column;
         }
         // Make sure we don't try to add "id" field;
         if (isset($value_of['id'])) {
@@ -150,10 +145,11 @@ class Record implements \ArrayAccess
                 return false;
             }
             $value_of = $this->getValuesForDb();
-            $return = (bool)$this->app()['db']->insert($this->tableName(), $value_of);
+            $return = $this->app()['db']->insert($this->tableName(), $value_of);
             if (in_array('id', $this->getColumns())) {
                 $this->id = $this->app()['db']->lastInsertId();
             }
+
             if (!$this->afterInsert()) {
                 return false;
             }
@@ -163,7 +159,8 @@ class Record implements \ArrayAccess
             }
 
             $value_of = $this->getValuesForDb();
-            $return = (bool)$this->app()['db']->update($this->tableName(), $value_of, ['id' => $this->id]);
+            $return = $this->app()['db']->update($this->tableName(), $value_of, ['id' => $this->id]);
+
             if (!$this->afterUpdate()) {
                 return false;
             }
@@ -182,22 +179,35 @@ class Record implements \ArrayAccess
      */
     public function delete()
     {
+        $criteria = [];
+        if (!empty($this->id)) {
+            $criteria = ['id = ' => $this->id];
+        } else {
+            foreach ($this->getColumns() as $column) {
+                if (isset($this->$column)) {
+                    $criteria[$column . '='] = $this->$column;
+                }
+            }
+        }
+        return $this->deleteWhere($criteria);
+    }
+
+    public function deleteWhere(array $criteria)
+    {
+        if (empty($criteria)) {
+            throw new \Exception('empty criteria');
+        }
         if (!$this->beforeDelete()) {
             return false;
         }
-        if (!isset($this->id)) {
-            throw new \Exception('cant delete without id');
-        }
-        $return = (bool)$this->app()['db']->delete($this->tableName(), ['id' => $this->id]);
+
+        $return = $this->where($criteria)->delete();
+
         if (!$this->afterDelete()) {
             $this->save();
             return false;
         }
         return $return;
-    }
-
-    public function deleteBy(array $criteria)
-    {
     }
 
     /**
@@ -221,7 +231,8 @@ class Record implements \ArrayAccess
             $this->builder()->where($key . $this->builder()->createNamedParameter($val));
         }
 //        var_dump(static::$builder->getSql());exit;
-//        echo $this->builder()->getSQL();exit;
+//        echo $this->builder()->getSQL();
+//        exit;
 
         return $this->builder();
     }
@@ -243,82 +254,6 @@ class Record implements \ArrayAccess
     {
         return $this->createBuilder()->all();
     }
-
-//    /**
-//     * @param array $criteria Options array containing parameters for the query
-//     * @param array $orderBy
-//     * @param integer $limit
-//     * @param integer $offset
-//     * @return array
-//     */
-//    public function findBy(array $criteria, array $orderBy = [], $limit = null, $offset = null)
-//    {
-//        $qb = $this->builder();
-//        foreach ($criteria as $key => $value) {
-//            $type = null;
-//            if (is_array($value)) {
-//                $type = DBAL\Connection::PARAM_STR_ARRAY;
-//                $where = $key . ' IN (:' . $key . ')';
-//            } else {
-//                $where = $key . ' = :' . $key;
-//            }
-//            $qb->andWhere($where)
-//               ->setParameter(':' . $key, $value, $type);
-//        }
-//        foreach ($orderBy as $sort => $order) {
-//            $qb->addOrderBy($sort, $order);
-//        }
-//        if ($limit) {
-//            $qb->setMaxResults($limit);
-//        }
-//        if ($offset) {
-//            $qb->setFirstResult($offset);
-//        }
-//        return $this->findByQueryBuilder($qb);
-//    }
-//    public function findBySql($sql)
-//    {
-//        $qb = $this->app()['db']->query();
-//        return '';
-//    }
-//    public function countByLastQuery()
-//    {
-//        return $this->builder()->select('count(id)')
-//                    ->resetQueryPart('orderBy')
-//                    ->setMaxResults(null)
-//                    ->setFirstResult(null)
-//                    ->execute()
-//                    ->fetchColumn(0);
-//    }
-
-//    /**
-//     * Returns a single object, retrieved from the database.
-//     *
-//     * @param array $criteria Options array containing parameters for the query
-//     * @throws \Exception
-//     * @return $this
-//     */
-//    public function findOneBy(array $criteria)
-//    {
-//        $items = $this->findBy($criteria, [], 2);
-//        if (!$items) {
-//            return false;
-//        }
-//        if (count($items) > 1) {
-//            throw new \Exception('finded more than one');
-//        }
-//        return array_shift($items);
-//    }
-
-
-//    /**
-//     * @param DBAL\Query\QueryBuilder $qb
-//     * @return array
-//     */
-//    public function findByQueryBuilder(DBAL\Query\QueryBuilder $qb)
-//    {
-//        return $this->builder()->execute()->fetchAll(\PDO::FETCH_CLASS, get_class($this), [null, true]);
-//    }
 
     /**
      * Allows sub-classes do stuff before a Record is saved.
