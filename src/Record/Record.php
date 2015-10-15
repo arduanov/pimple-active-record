@@ -14,7 +14,7 @@ class Record //implements \ArrayAccess
 {
     protected static $app;
     protected static $builder;
-    protected static $exists = false;
+    public static $exists = false;
     protected static $query;
 
     public function setApp(Container $app)
@@ -147,7 +147,7 @@ class Record //implements \ArrayAccess
      * @param  array $attributes
      * @return $this
      */
-    protected function fill(array $attributes)
+    public function fill(array $attributes)
     {
         foreach ($attributes as $key => $value) {
             $this->$key = $value;
@@ -241,7 +241,7 @@ class Record //implements \ArrayAccess
      */
     public function delete()
     {
-        if (static::$exists) {
+        if (!static::$exists) {
             return false;
         }
 
@@ -256,10 +256,9 @@ class Record //implements \ArrayAccess
         } else {
             $criteria = (array)$this;
         }
-
         $this->app()['db']->delete($this->tableName(), $criteria);
-
         $this->afterDelete();
+
         static::$exists = false;
 
         return true;

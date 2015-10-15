@@ -99,6 +99,26 @@ class QueryBuilder extends \Doctrine\DBAL\Query\QueryBuilder
         return $this;
     }
 
+
+    /**
+     * Find a model by its primary key.
+     *
+     * @param  mixed $id
+     * @param  array $columns
+     * @return $this->model
+     */
+    public function find($id, $columns = ['*'])
+    {
+        if (is_array($id)) {
+            return $this->findMany($id, $columns);
+        }
+        return $this->where('id', $id)->first();
+    }
+
+    public function findMany($rows_count)
+    {
+    }
+
     public function skip($rows_count)
     {
         parent::setFirstResult($rows_count);
@@ -109,6 +129,19 @@ class QueryBuilder extends \Doctrine\DBAL\Query\QueryBuilder
     {
         parent::setMaxResults($rows_count);
         return $this;
+    }
+
+
+    /**
+     * Execute the query and get the first result.
+     *
+     * @param  array $columns
+     * @return $this->model
+     */
+    public function first($columns = ['*'])
+    {
+        $items = $this->take(1)->get($columns);
+        return $items ? array_shift($items) : [];
     }
 
     public function one()

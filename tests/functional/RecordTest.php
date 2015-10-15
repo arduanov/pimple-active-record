@@ -34,11 +34,24 @@ class RecordTest extends \PHPUnit_Framework_TestCase
         $this->record = $record = new \Record\Record();
         $record->setApp($app);
         $record->loadModels($models);
+
+        $this->loadFixtures();
     }
 
     protected function tearDown()
     {
     }
+
+    protected function loadFixtures()
+    {
+        $post = $this->app['post.model']->fill(['title' => 'title', 'slug' => 'slug']);
+        $post->save();
+        $post2 = $this->app['post.model']->fill(['title' => 'title2', 'slug' => 'slug2']);
+        $post2->save();
+        $post3 = $this->app['post.model']->fill(['title' => 'title44', 'slug' => 'slug2']);
+        $post3->save();
+    }
+
     public function testAutocomplete()
     {
 //        $record = new \Record\Record();
@@ -65,55 +78,40 @@ class RecordTest extends \PHPUnit_Framework_TestCase
     }
 
 
-    public function testCRUD()
+    public function testFind()
     {
-        /**
-         * test save
-         */
-        $post = $this->app['post.model']->create(['title' => 'title', 'slug' => 'slug']);
-        $post->save();
-        $post2 = $this->app['post.model']->create(['title' => 'title1', 'slug' => 'slug2']);
-        $post2->save();
-        $post3 = $this->app['post.model']->create(['title' => 'title44', 'slug' => 'slug2']);
-        $post3->save();
+        $post = $this->app['post.model']->find(2);
 
-        $this->assertEquals(2, $post2->id);
-
-        /**
-         * test update
-         */
-        $post2->slug = 99;
-        $result_id = $post2->save();
-        $this->assertEquals(1,$result_id);
-
-        /**
-         * find where
-         */
-        $db_post_where = $this->app['post.model']->where('id', 2)->get();
-        $this->assertCount(2, $db_post_where);
-
-        /**
-         * find by id
-         */
-        $db_post = $this->app['post.model']->find(3);
-        $this->assertEquals($post3->title, $db_post->title);
+        $this->assertEquals(2, $post->id);
+        $this->assertEquals('title2', $post->title);
+        $this->assertEquals('slug2', $post->slug);
+    }
 
 
-        /**
-         * find all
-         */
-        $db_post_all = $this->app['post.model']->all();
-        $this->assertCount(3, $db_post_all);
+    public function testAll()
+    {
+        $all = $this->app['post.model']->all();
+        $this->assertCount(3, $all);
+    }
 
+    public function testUpdate()
+    {
+        $post = $this->app['post.model']->find(2);
+        $post->slug = 99;
+        $result_id = $post->save();
+        $this->assertEquals(1, $result_id);
+    }
 
+    public function testWhere()
+    {
+        $posts  = $this->app['post.model']->where('id', '>=', 2)->get();
+        $this->assertCount(2, $posts);
+    }
 
-        /**
-         * delete
-         */
-        $delete_result = $post2->delete();
+    public function testDelete()
+    {
+        $delete_result = $this->app['post.model']->find(1)->delete();
         $this->assertEquals(1, $delete_result);
-
-
     }
 
 
