@@ -39,6 +39,11 @@ class RecordTest extends \PHPUnit_Framework_TestCase
     protected function tearDown()
     {
     }
+    public function testAutocomplete()
+    {
+//        $record = new \Record\Record();
+//        $record->foo('rrr')->
+    }
 
     public function testContainer()
     {
@@ -51,7 +56,7 @@ class RecordTest extends \PHPUnit_Framework_TestCase
         $this->assertInstanceOf('Comment', $this->app['comment.model']);
     }
 
-    public function testtableName()
+    public function testTableName()
     {
         $table = $this->app['post.model']->tableName();
         $this->assertEquals('post', $table);
@@ -84,7 +89,7 @@ class RecordTest extends \PHPUnit_Framework_TestCase
         /**
          * find where
          */
-        $db_post_where = $this->app['post.model']->where(['id >='=> 2])->all();
+        $db_post_where = $this->app['post.model']->where('id', 2)->get();
         $this->assertCount(2, $db_post_where);
 
         /**

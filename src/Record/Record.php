@@ -6,16 +6,25 @@ use Pimple\Container;
 use Doctrine\DBAL;
 use Doctrine\Common\Inflector\Inflector;
 
-class Record implements \ArrayAccess
+/**
+ * Class Record
+ * @method $this foo() foo($parametersHere) explanation of the function
+ */
+class Record //implements \ArrayAccess
 {
     protected static $app;
     protected static $builder;
+    protected static $exists = false;
+    protected static $query;
 
     public function setApp(Container $app)
     {
         self::$app = $app;
     }
 
+    /**
+     * @return Container
+     */
     public function app()
     {
         return self::$app;
@@ -25,47 +34,73 @@ class Record implements \ArrayAccess
 //    {
 //        return $this->builder()->select('*')->from($this->tableName());
 //    }
-    public function createBuilder()
-    {
-        $builder = new QueryBuilder($this->app()['db']);
-        $builder->setModel($this);
-        $builder->select('*')->from($this->tableName());
-
-        return static::$builder = $builder;
-    }
-
     /**
      * @return QueryBuilder
      */
-    protected function builder()
+    public function newQuery()
     {
-        return static::$builder;
+        $query = new QueryBuilder($this->app()['db']);
+        $query->setModel($this);
+        $query->select('*')->from($this->tableName());
+        return static::$query = $query;
     }
+
+    /**
+     * Get the underlying query builder instance.
+     *
+     * @return QueryBuilder
+     */
+    public function getQuery()
+    {
+        return static::$query;
+    }
+
+    /**
+     * Set the underlying query builder instance.
+     *
+     * @param  QueryBuilder $query
+     * @return $this
+     */
+    public function setQuery($query)
+    {
+        static::$query = $query;
+        return $this;
+    }
+
+    /**
+     * Get all of the models from the database.
+     *
+     * @param  array|mixed $columns
+     * @return array <$this>
+     */
+    public function all($columns = ['*'])
+    {
+        return $this->newQuery()->get($columns);
+    }
+
 
     public function loadModels(array $modelsList)
     {
+//        foreach ($modelsList as $name => $class) {
+//            if (is_string($class)) {
+//                $closure = function () use ($class) {
+//                    return new $class();
+//                };
+//                $this->app()[$name] = $closure;
+//            } elseif (is_callable($class)) {
+//                $this->app()[$name] = $class;
+//            }
+//        }
         foreach ($modelsList as $name => $class) {
-            if (is_string($class)) {
-                $closure = function () use ($class) {
+            if (is_callable($class)) {
+                $callable = $class;
+            } elseif (is_string($class)) {
+                $callable = function () use ($class) {
                     return new $class();
                 };
-                $this->app()[$name] = $closure;
-            } elseif (is_callable($class)) {
-                $this->app()[$name] = $class;
             }
+            $this->app()[$name] = $this->app()->factory($callable);
         }
-    }
-
-    public function create(array $data = null)
-    {
-        $class = get_class($this);
-        $model = new $class;
-
-        if ($data) {
-            $model->setFromData($data);
-        }
-
-        return $model;
     }
 
     /**
@@ -101,23 +136,37 @@ class Record implements \ArrayAccess
     public function __construct($is_pdo_fetch = false)
     {
         if ($is_pdo_fetch) {
+            static::$exists = true;
             $this->afterFetch();
         }
     }
 
     /**
-     * Sets the class's variables based on the key=>value pairs in the given array.
+     * Fill the model with an array of attributes.
      *
-     * @param array $data An array of key,value pairs.
+     * @param  array $attributes
+     * @return $this
      */
-    protected function setFromData(array $data)
+    protected function fill(array $attributes)
     {
-        foreach ($data as $key => $value) {
+        foreach ($attributes as $key => $value) {
             $this->$key = $value;
         }
+        return $this;
     }
 
-    private function getValuesForDb()
+    /**
+     * Append attributes to query when building a query.
+     *
+     * @param  array|string $attributes
+     * @return $this
+     */
+    public function append($attributes)
+    {
+        return $this->fill(array_merge((array)$this, $attributes));
+    }
+
+    protected function getValuesForDb()
     {
         $value_of = [];
         foreach ($this->getColumns() as $column) {
@@ -171,6 +220,19 @@ class Record implements \ArrayAccess
         return $return;
     }
 
+    public function destroy($ids)
+    {
+        $count = 0;
+        $ids = is_array($ids) ? $ids : func_get_args();
+
+        foreach ($this->whereIn('id', $ids)->get() as $model) {
+            if ($model->delete()) {
+                $count++;
+            }
+        }
+        return $count;
+    }
+
     /**
      * Generates a delete string and executes it.
      *
@@ -179,35 +241,28 @@ class Record implements \ArrayAccess
      */
     public function delete()
     {
-        $criteria = [];
-        if (!empty($this->id)) {
-            $criteria = ['id = ' => $this->id];
-        } else {
-            foreach ($this->getColumns() as $column) {
-                if (isset($this->$column)) {
-                    $criteria[$column . '='] = $this->$column;
-                }
-            }
+        if (static::$exists) {
+            return false;
         }
-        return $this->deleteWhere($criteria);
-    }
 
-    public function deleteWhere(array $criteria)
-    {
-        if (empty($criteria)) {
-            throw new \Exception('empty criteria');
-        }
         if (!$this->beforeDelete()) {
             return false;
         }
-
-        $return = $this->where($criteria)->delete();
-
-        if (!$this->afterDelete()) {
-            $this->save();
-            return false;
+//        if (!isset($this->id)) {
+//            throw new \Exception('cant delete without id');
+//        }
+        if (!empty($this->id)) {
+            $criteria = ['id' => $this->id];
+        } else {
+            $criteria = (array)$this;
         }
-        return $return;
+
+        $this->app()['db']->delete($this->tableName(), $criteria);
+
+        $this->afterDelete();
+        static::$exists = false;
+
+        return true;
     }
 
     /**
@@ -222,37 +277,6 @@ class Record implements \ArrayAccess
     public function getColumns()
     {
         return array_keys(get_object_vars($this));
-    }
-
-    public function where(array $where)
-    {
-        $this->createBuilder();
-        foreach ($where as $key => $val) {
-            $this->builder()->where($key . $this->builder()->createNamedParameter($val));
-        }
-//        var_dump(static::$builder->getSql());exit;
-//        echo $this->builder()->getSQL();
-//        exit;
-
-        return $this->builder();
-    }
-
-    /**
-     * @param $id
-     * @return $this
-     * @throws \Exception
-     */
-    public function find($id)
-    {
-        return $this->where(['id = ' => $id])->one();
-    }
-
-    /**
-     * @return array
-     */
-    public function all()
-    {
-        return $this->createBuilder()->all();
     }
 
     /**
@@ -345,35 +369,55 @@ class Record implements \ArrayAccess
         return true;
     }
 
+//    /**
+//     * @inheritdoc
+//     */
+//    public function offsetSet($offset, $value)
+//    {
+//        $this->$offset = $value;
+//    }
+//
+//    /**
+//     * @inheritdoc
+//     */
+//    public function offsetExists($offset)
+//    {
+//        return isset($this->$offset);
+//    }
+//
+//    /**
+//     * @inheritdoc
+//     */
+//    public function offsetUnset($offset)
+//    {
+//        unset($this->$offset);
+//    }
+//
+//    /**
+//     * @inheritdoc
+//     */
+//    public function offsetGet($offset)
+//    {
+//        return $this->$offset;
+//    }
+//
+//    public function __call($name, $arguments)
+//    {
+//        return $this->builder()->$name();
+//    }
     /**
-     * @inheritdoc
+     * Handle dynamic method calls into the model.
+     *
+     * @param  string $method
+     * @param  array $parameters
+     * @return mixed
      */
-    public function offsetSet($offset, $value)
+    public function __call($method, $parameters)
     {
-        $this->$offset = $value;
-    }
-
-    /**
-     * @inheritdoc
-     */
-    public function offsetExists($offset)
-    {
-        return isset($this->$offset);
-    }
-
-    /**
-     * @inheritdoc
-     */
-    public function offsetUnset($offset)
-    {
-        unset($this->$offset);
-    }
-
-    /**
-     * @inheritdoc
-     */
-    public function offsetGet($offset)
-    {
-        return $this->$offset;
+//        if (in_array($method, ['increment', 'decrement'])) {
+//            return call_user_func_array([$this, $method], $parameters);
+//        }
+        $query = $this->newQuery();
+        return call_user_func_array([$query, $method], $parameters);
     }
 }
