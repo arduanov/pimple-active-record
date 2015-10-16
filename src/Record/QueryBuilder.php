@@ -15,34 +15,6 @@ class QueryBuilder extends \Doctrine\DBAL\Query\QueryBuilder
     }
 
     /**
-     * Add a "where in" clause to the query.
-     *
-     * @param  string $column
-     * @param  mixed $values
-     * @param  string $boolean
-     * @param  bool $not
-     * @return $this
-     */
-    public function whereIn($column, $values, $boolean = 'and', $not = false)
-    {
-        $operator = $not ? '<>' : '=';
-        $this->where($column, $operator, $values, $boolean, $not);
-        return $this;
-    }
-
-    /**
-     * Add an "or where in" clause to the query.
-     *
-     * @param  string $column
-     * @param  mixed $values
-     * @return $this
-     */
-    public function orWhereIn($column, $values)
-    {
-        return $this->whereIn($column, $values, 'or');
-    }
-
-    /**
      * Add an "or where" clause to the query.
      *
      * @param  string $column
@@ -52,19 +24,16 @@ class QueryBuilder extends \Doctrine\DBAL\Query\QueryBuilder
      */
     public function orWhere($column, $operator = null, $value = null, $boolean = 'and')
     {
-        $this->where($column, $operator, $value, 'or');
+        return $this->where($column, $operator, $value, 'or');
     }
 
     public function where($column, $operator = null, $value = null, $boolean = 'and')
     {
         $args = func_get_args();
 
-        if (!$args && $args > 4) {
-            throw new \Exception('bad params count');
-        }
-
         if (count($args) == 1) {
             parent::where($args[0]);
+            return $this;
         }
 
         $column = $args[0];
@@ -125,7 +94,7 @@ class QueryBuilder extends \Doctrine\DBAL\Query\QueryBuilder
      */
     public function findMany($ids, $columns = ['*'])
     {
-        return $this->whereIn('id', $ids)->get($columns);
+        return $this->where('id', $ids)->get($columns);
     }
 
 
@@ -176,18 +145,18 @@ class QueryBuilder extends \Doctrine\DBAL\Query\QueryBuilder
         return $items ? array_shift($items) : null;
     }
 
-    public function one()
-    {
-        $items = $this->get();
-
-        if (!$items) {
-            return null;
-        }
-        if (count($items) > 1) {
-            throw new \Exception('finded more than one');
-        }
-        return array_shift($items);
-    }
+//    public function one()
+//    {
+//        $items = $this->get();
+//
+//        if (!$items) {
+//            return null;
+//        }
+//        if (count($items) > 1) {
+//            throw new \Exception('finded more than one');
+//        }
+//        return array_shift($items);
+//    }
 
     public function get()
     {
@@ -196,11 +165,7 @@ class QueryBuilder extends \Doctrine\DBAL\Query\QueryBuilder
 
     public function delete()
     {
-        $where_clause = parent::getQueryPart('where');
-        if ($where_clause) {
-            return parent::delete($this->model->tableName())->execute();
-        }
-        return false;
+        return parent::delete($this->model->tableName())->execute();
     }
 
     /**
@@ -212,15 +177,9 @@ class QueryBuilder extends \Doctrine\DBAL\Query\QueryBuilder
      */
     public function __call($method, $parameters)
     {
-//        if (isset($this->macros[$method])) {
-//            array_unshift($parameters, $this);
-//            return call_user_func_array($this->macros[$method], $parameters);
-//        } else
         if (method_exists($this->model, $scope = 'scope' . ucfirst($method))) {
-            return $this->model->$scope($this, $parameters);
-//            call_user_func_array([$this->query, $method], $parameters);
+            array_unshift($parameters, $this);
+            return call_user_func_array([$this->model, $scope], $parameters);
         }
-//        $result = call_user_func_array([$this->query, $method], $parameters);
-//        return in_array($method, $this->passthru) ? $result : $this;
     }
 }

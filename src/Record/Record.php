@@ -40,27 +40,27 @@ class Record //implements \ArrayAccess
         return $this->_query = $query;
     }
 
-    /**
-     * Get the underlying query builder instance.
-     *
-     * @return QueryBuilder
-     */
-    public function getQuery()
-    {
-        return $this->_query;
-    }
-
-    /**
-     * Set the underlying query builder instance.
-     *
-     * @param  QueryBuilder $query
-     * @return $this
-     */
-    public function setQuery($query)
-    {
-        $this->_query = $query;
-        return $this;
-    }
+//    /**
+//     * Get the underlying query builder instance.
+//     *
+//     * @return QueryBuilder
+//     */
+//    public function getQuery()
+//    {
+//        return $this->_query;
+//    }
+//
+//    /**
+//     * Set the underlying query builder instance.
+//     *
+//     * @param  QueryBuilder $query
+//     * @return $this
+//     */
+//    public function setQuery($query)
+//    {
+//        $this->_query = $query;
+//        return $this;
+//    }
 
     /**
      * Get all of the models from the database.
@@ -186,7 +186,7 @@ class Record //implements \ArrayAccess
     {
         $count = 0;
         $ids = is_array($ids) ? $ids : func_get_args();
-        foreach ($this->whereIn('id', $ids)->get() as $model) {
+        foreach ($this->where('id', $ids)->get() as $model) {
             if ($model->delete()) {
                 $count++;
             }
@@ -209,9 +209,7 @@ class Record //implements \ArrayAccess
         if (!$this->beforeDelete($this->app())) {
             return false;
         }
-//        if (!isset($this->id)) {
-//            throw new \Exception('cant delete without id');
-//        }
+
         if (!empty($this->id)) {
             $criteria = ['id' => $this->id];
         } else {
@@ -376,9 +374,6 @@ class Record //implements \ArrayAccess
      */
     public function __call($method, $parameters)
     {
-//        if (in_array($method, ['increment', 'decrement'])) {
-//            return call_user_func_array([$this, $method], $parameters);
-//        }
         $query = $this->newQuery();
         return call_user_func_array([$query, $method], $parameters);
     }

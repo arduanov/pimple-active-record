@@ -177,10 +177,37 @@ class RecordTest extends \PHPUnit_Framework_TestCase
 
     public function testSkipTake()
     {
-        $result = $this->app['post.model']->skip(1)->take(1)->get();
-        $this->assertCount(1, $result);
-        $this->assertEquals(2, $result[0]->id);
+        $sql = $this->app['post.model']->skip(1)->take(1)->getSql();
+        $this->assertEquals($sql, 'SELECT * FROM post LIMIT 1 OFFSET 1');
     }
 
+    public function testWhereDoctrine()
+    {
+        $sql = $this->app['post.model']->where('id = :id')->setParameter(':id', 2)->getSql();
+        $this->assertEquals($sql, 'SELECT * FROM post WHERE id = :id');
+    }
 
+    public function testOrWhere()
+    {
+        $sql = $this->app['post.model']->where('id', '=', 100)->where('id', '=', 2, 'or')->getSql();
+        $this->assertEquals($sql, 'SELECT * FROM post WHERE (id=:dcValue1) OR (id=:dcValue2)');
+
+        $sql = $this->app['post.model']->orWhere('id', '=', 100)->orWhere('id', '=', 2)->getSql();
+        $this->assertEquals($sql, 'SELECT * FROM post WHERE (id=:dcValue1) OR (id=:dcValue2)');
+    }
+
+    public function testScope()
+    {
+        $query = $this->app['post.model']->title('title2');
+        $sql = $query->getSql();
+        $params = $query->getParameters();
+        $this->assertEquals($sql, 'SELECT * FROM post WHERE title=:dcValue1');
+        $this->assertEquals($params['dcValue1'], 'title2');
+    }
+
+    public function testScopeFail()
+    {
+        $not_found_method = $this->app['post.model']->notFound();
+        $this->assertSame($not_found_method, null);
+    }
 }
