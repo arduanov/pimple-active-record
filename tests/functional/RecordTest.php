@@ -18,8 +18,8 @@ class RecordTest extends \PHPUnit_Framework_TestCase
         ];
 
         $models = [
-            'post.model' => function () {
-                return new Post();
+            'post.model' => function () use ($app) {
+                return new Post($app);;
             },
             'comment.model' => 'Comment',
         ];
@@ -31,10 +31,16 @@ class RecordTest extends \PHPUnit_Framework_TestCase
             return $db;
         };
 
-        $this->record = $record = new \Record\Record();
-        $record->setApp($app);
-        $record->loadModels($models);
-
+        foreach ($models as $name => $class) {
+            if (is_callable($class)) {
+                $callable = $class;
+            } else {
+                $callable = function () use ($class, $app) {
+                    return new $class($app);
+                };
+            }
+            $app[$name] = $app->factory($callable);
+        }
         $this->loadFixtures();
     }
 
@@ -60,7 +66,7 @@ class RecordTest extends \PHPUnit_Framework_TestCase
 
     public function testContainer()
     {
-        $this->assertInstanceOf('Pimple\Container', $this->record->app());
+        $this->assertInstanceOf('Pimple\Container', $this->app['post.model']->app());
     }
 
     public function testLoadModels()
@@ -87,6 +93,43 @@ class RecordTest extends \PHPUnit_Framework_TestCase
         $this->assertEquals('slug2', $post->slug);
     }
 
+    public function testFindIds()
+    {
+        $posts = $this->app['post.model']->find([1, 2]);
+        $this->assertCount(2, $posts);
+    }
+
+
+    public function testFindOrFailSuccess()
+    {
+        $post = $this->app['post.model']->findOrFail(2);
+        $this->assertEquals(2, $post->id);
+        $this->assertEquals('title2', $post->title);
+        $this->assertEquals('slug2', $post->slug);
+    }
+
+    public function testFindOrFailIdsSuccess()
+    {
+        $posts = $this->app['post.model']->findOrFail([1, 2]);
+        $this->assertCount(2, $posts);
+    }
+
+    /**
+     * @expectedException \Record\ModelNotFoundException
+     */
+    public function testFindOrFail()
+    {
+        $this->app['post.model']->findOrFail(100);
+    }
+
+    /**
+     * @expectedException \Record\ModelNotFoundException
+     */
+    public function testFindOrFailIds()
+    {
+        $this->app['post.model']->findOrFail([1, 100]);
+    }
+
 
     public function testAll()
     {
@@ -104,7 +147,7 @@ class RecordTest extends \PHPUnit_Framework_TestCase
 
     public function testWhere()
     {
-        $posts  = $this->app['post.model']->where('id', '>=', 2)->get();
+        $posts = $this->app['post.model']->where('id', '>=', 2)->get();
         $this->assertCount(2, $posts);
     }
 
@@ -112,6 +155,31 @@ class RecordTest extends \PHPUnit_Framework_TestCase
     {
         $delete_result = $this->app['post.model']->find(1)->delete();
         $this->assertEquals(1, $delete_result);
+    }
+
+    public function testDeleteWhere()
+    {
+        $delete_result = $this->app['post.model']->where('id', [1, 2])->delete();
+        $this->assertEquals(2, $delete_result);
+    }
+
+    public function testDestroyId()
+    {
+        $delete_result = $this->app['post.model']->destroy(1);
+        $this->assertEquals(1, $delete_result);
+    }
+
+    public function testDestroyIds()
+    {
+        $delete_result = $this->app['post.model']->destroy(1, 2);
+        $this->assertEquals(2, $delete_result);
+    }
+
+    public function testSkipTake()
+    {
+        $result = $this->app['post.model']->skip(1)->take(1)->get();
+        $this->assertCount(1, $result);
+        $this->assertEquals(2, $result[0]->id);
     }
 
 

@@ -12,14 +12,13 @@ use Doctrine\Common\Inflector\Inflector;
  */
 class Record //implements \ArrayAccess
 {
-    protected static $app;
-    protected static $builder;
-    public static $exists = false;
-    protected static $query;
+    protected $_app;
+    protected $_exists = false;
+    protected $_query;
 
     public function setApp(Container $app)
     {
-        self::$app = $app;
+        $this->_app = $app;
     }
 
     /**
@@ -27,13 +26,9 @@ class Record //implements \ArrayAccess
      */
     public function app()
     {
-        return self::$app;
+        return $this->_app;
     }
 
-//    public function getQueryBuilder()
-//    {
-//        return $this->builder()->select('*')->from($this->tableName());
-//    }
     /**
      * @return QueryBuilder
      */
@@ -42,7 +37,7 @@ class Record //implements \ArrayAccess
         $query = new QueryBuilder($this->app()['db']);
         $query->setModel($this);
         $query->select('*')->from($this->tableName());
-        return static::$query = $query;
+        return $this->_query = $query;
     }
 
     /**
@@ -52,7 +47,7 @@ class Record //implements \ArrayAccess
      */
     public function getQuery()
     {
-        return static::$query;
+        return $this->_query;
     }
 
     /**
@@ -63,7 +58,7 @@ class Record //implements \ArrayAccess
      */
     public function setQuery($query)
     {
-        static::$query = $query;
+        $this->_query = $query;
         return $this;
     }
 
@@ -76,31 +71,6 @@ class Record //implements \ArrayAccess
     public function all($columns = ['*'])
     {
         return $this->newQuery()->get($columns);
-    }
-
-
-    public function loadModels(array $modelsList)
-    {
-//        foreach ($modelsList as $name => $class) {
-//            if (is_string($class)) {
-//                $closure = function () use ($class) {
-//                    return new $class();
-//                };
-//                $this->app()[$name] = $closure;
-//            } elseif (is_callable($class)) {
-//                $this->app()[$name] = $class;
-//            }
-//        }
-        foreach ($modelsList as $name => $class) {
-            if (is_callable($class)) {
-                $callable = $class;
-            } elseif (is_string($class)) {
-                $callable = function () use ($class) {
-                    return new $class();
-                };
-            }
-            $this->app()[$name] = $this->app()->factory($callable);
-        }
     }
 
     /**
@@ -131,13 +101,16 @@ class Record //implements \ArrayAccess
      * If the $data parameter is given and is an array, the constructor sets
      * the class's variables based on the key=>value pairs found in the array.
      *
+     * @param Container $app
      * @param boolean $is_pdo_fetch
      */
-    public function __construct($is_pdo_fetch = false)
+    public function __construct(Container $app, $is_pdo_fetch = false)
     {
+        $this->setApp($app);
+
         if ($is_pdo_fetch) {
-            static::$exists = true;
-            $this->afterFetch();
+            $this->_exists = true;
+            $this->afterFetch($this->app());
         }
     }
 
@@ -155,18 +128,7 @@ class Record //implements \ArrayAccess
         return $this;
     }
 
-    /**
-     * Append attributes to query when building a query.
-     *
-     * @param  array|string $attributes
-     * @return $this
-     */
-    public function append($attributes)
-    {
-        return $this->fill(array_merge((array)$this, $attributes));
-    }
-
-    protected function getValuesForDb()
+    private function getValuesForDb()
     {
         $value_of = [];
         foreach ($this->getColumns() as $column) {
@@ -186,11 +148,11 @@ class Record //implements \ArrayAccess
      */
     public function save()
     {
-        if (!$this->beforeSave()) {
+        if (!$this->beforeSave($this->app())) {
             return false;
         }
         if (empty($this->id)) {
-            if (!$this->beforeInsert()) {
+            if (!$this->beforeInsert($this->app())) {
                 return false;
             }
             $value_of = $this->getValuesForDb();
@@ -199,22 +161,22 @@ class Record //implements \ArrayAccess
                 $this->id = $this->app()['db']->lastInsertId();
             }
 
-            if (!$this->afterInsert()) {
+            if (!$this->afterInsert($this->app())) {
                 return false;
             }
         } else {
-            if (!$this->beforeUpdate()) {
+            if (!$this->beforeUpdate($this->app())) {
                 return false;
             }
 
             $value_of = $this->getValuesForDb();
             $return = $this->app()['db']->update($this->tableName(), $value_of, ['id' => $this->id]);
 
-            if (!$this->afterUpdate()) {
+            if (!$this->afterUpdate($this->app())) {
                 return false;
             }
         }
-        if (!$this->afterSave()) {
+        if (!$this->afterSave($this->app())) {
             return false;
         }
         return $return;
@@ -224,7 +186,6 @@ class Record //implements \ArrayAccess
     {
         $count = 0;
         $ids = is_array($ids) ? $ids : func_get_args();
-
         foreach ($this->whereIn('id', $ids)->get() as $model) {
             if ($model->delete()) {
                 $count++;
@@ -241,11 +202,11 @@ class Record //implements \ArrayAccess
      */
     public function delete()
     {
-        if (!static::$exists) {
+        if (!$this->_exists) {
             return false;
         }
 
-        if (!$this->beforeDelete()) {
+        if (!$this->beforeDelete($this->app())) {
             return false;
         }
 //        if (!isset($this->id)) {
@@ -257,9 +218,9 @@ class Record //implements \ArrayAccess
             $criteria = (array)$this;
         }
         $this->app()['db']->delete($this->tableName(), $criteria);
-        $this->afterDelete();
+        $this->afterDelete($this->app());
 
-        static::$exists = false;
+        $this->_exists = false;
 
         return true;
     }
@@ -275,7 +236,9 @@ class Record //implements \ArrayAccess
      */
     public function getColumns()
     {
-        return array_keys(get_object_vars($this));
+        return array_filter(array_keys(get_object_vars($this)), function ($val) {
+            return substr($val, 0, 1) != '_';
+        });
     }
 
     /**
@@ -283,7 +246,7 @@ class Record //implements \ArrayAccess
      *
      * @return boolean True if the actions succeeded.
      */
-    protected function beforeSave()
+    protected function beforeSave(Container $app)
     {
         return true;
     }
@@ -293,7 +256,7 @@ class Record //implements \ArrayAccess
      *
      * @return boolean True if the actions succeeded.
      */
-    protected function beforeInsert()
+    protected function beforeInsert(Container $app)
     {
         return true;
     }
@@ -303,7 +266,7 @@ class Record //implements \ArrayAccess
      *
      * @return boolean True if the actions succeeded.
      */
-    protected function beforeUpdate()
+    protected function beforeUpdate(Container $app)
     {
         return true;
     }
@@ -313,7 +276,7 @@ class Record //implements \ArrayAccess
      *
      * @return boolean True if the actions succeeded.
      */
-    protected function beforeDelete()
+    protected function beforeDelete(Container $app)
     {
         return true;
     }
@@ -323,7 +286,7 @@ class Record //implements \ArrayAccess
      *
      * @return boolean True if the actions succeeded.
      */
-    protected function afterFetch()
+    protected function afterFetch(Container $app)
     {
         return true;
     }
@@ -333,7 +296,7 @@ class Record //implements \ArrayAccess
      *
      * @return boolean True if the actions succeeded.
      */
-    protected function afterSave()
+    protected function afterSave(Container $app)
     {
         return true;
     }
@@ -343,7 +306,7 @@ class Record //implements \ArrayAccess
      *
      * @return boolean True if the actions succeeded.
      */
-    protected function afterInsert()
+    protected function afterInsert(Container $app)
     {
         return true;
     }
@@ -353,7 +316,7 @@ class Record //implements \ArrayAccess
      *
      * @return boolean True if the actions succeeded.
      */
-    protected function afterUpdate()
+    protected function afterUpdate(Container $app)
     {
         return true;
     }
@@ -363,7 +326,7 @@ class Record //implements \ArrayAccess
      *
      * @return boolean True if the actions succeeded.
      */
-    protected function afterDelete()
+    protected function afterDelete(Container $app)
     {
         return true;
     }

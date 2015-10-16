@@ -85,7 +85,8 @@ class QueryBuilder extends \Doctrine\DBAL\Query\QueryBuilder
         }
         if (is_array($value)) {
             $operator = $operator == '=' ? 'in' : 'notIn';
-            $this->expr()->$operator($column, parent::createNamedParameter($value, \Doctrine\DBAL\Connection::PARAM_STR_ARRAY));
+            $where_clause = $this->expr()
+                                 ->$operator($column, parent::createNamedParameter($value, \Doctrine\DBAL\Connection::PARAM_STR_ARRAY));
         } else {
             $where_clause = $column . $operator . parent::createNamedParameter($value);
         }
@@ -115,8 +116,39 @@ class QueryBuilder extends \Doctrine\DBAL\Query\QueryBuilder
         return $this->where('id', $id)->first();
     }
 
-    public function findMany($rows_count)
+    /**
+     * Find a model by its primary key.
+     *
+     * @param  array $ids
+     * @param  array $columns
+     * @return $this->model
+     */
+    public function findMany($ids, $columns = ['*'])
     {
+        return $this->whereIn('id', $ids)->get($columns);
+    }
+
+
+    /**
+     * Find a model by its primary key or throw an exception.
+     *
+     * @param  mixed $id
+     * @param  array $columns
+     * @return $this->model
+     *
+     * @throws ModelNotFoundException
+     */
+    public function findOrFail($id, $columns = ['*'])
+    {
+        $result = $this->find($id, $columns);
+        if (is_array($id)) {
+            if (count($result) == count(array_unique($id))) {
+                return $result;
+            }
+        } elseif (!is_null($result)) {
+            return $result;
+        }
+        throw (new ModelNotFoundException)->setModel(get_class($this->model));
     }
 
     public function skip($rows_count)
@@ -141,7 +173,7 @@ class QueryBuilder extends \Doctrine\DBAL\Query\QueryBuilder
     public function first($columns = ['*'])
     {
         $items = $this->take(1)->get($columns);
-        return $items ? array_shift($items) : [];
+        return $items ? array_shift($items) : null;
     }
 
     public function one()
@@ -159,7 +191,7 @@ class QueryBuilder extends \Doctrine\DBAL\Query\QueryBuilder
 
     public function get()
     {
-        return parent::execute()->fetchAll(\PDO::FETCH_CLASS, get_class($this->model), [true]);
+        return parent::execute()->fetchAll(\PDO::FETCH_CLASS, get_class($this->model), [$this->model->app(), true]);
     }
 
     public function delete()
