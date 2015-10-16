@@ -82,7 +82,7 @@ class QueryBuilder extends \Doctrine\DBAL\Query\QueryBuilder
         if (is_array($id)) {
             return $this->findMany($id, $columns);
         }
-        return $this->where('id', $id)->first();
+        return $this->where('id', $id)->first($columns);
     }
 
     /**
@@ -158,8 +158,10 @@ class QueryBuilder extends \Doctrine\DBAL\Query\QueryBuilder
 //        return array_shift($items);
 //    }
 
-    public function get()
+    public function get(array $columns = ['*'])
     {
+        $columns = implode(', ', $columns);
+        $this->select($columns);
         return parent::execute()->fetchAll(\PDO::FETCH_CLASS, get_class($this->model), [$this->model->app(), true]);
     }
 
