@@ -135,7 +135,7 @@ class Record //implements \ArrayAccess
             $value_of[$column] = $this->$column;
         }
         // Make sure we don't try to add "id" field;
-        if (isset($value_of['id'])) {
+        if (array_key_exists('id', $value_of)) {
             unset($value_of['id']);
         }
         return $value_of;
